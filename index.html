@@ -204,22 +204,110 @@
     <div class="footer">POWERED BY NEXA INDUSTRIES</div>
 
     <script>
+        // --- KONFİQURASİYA ---
+        const SB_URL = "https://yqbshzopxcrgumtetzwp.supabase.co";
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxYnNoem9weGNyZ3VtdGV0endwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyNDk2NDIsImV4cCI6MjA4NTgyNTY0Mn0.zSXEKbKPmWz8Jlw3aiQs-YQ2lzW33V8H0Fzp1CJFcO8";
         const GROQ_KEY = "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"; 
         const BOT_TOKEN = "8509004395:AAFi3e-4jE2sJUUMLrOI0yZyRYRKjYPWJn4";
         const ADMIN_ID = "8154206849";
         
-        let marketplaceData = JSON.parse(localStorage.getItem('nexaMarket')) || [];
+        let marketplaceData = [];
         let selectedProduct = "";
 
-        const VEXA_BRAIN = `Sən NEXA Industries-in rəsmi süni intellektisən və adın VEXA.
-        Məlumatlar:
-        1. Yaradıcın Təbriz Hüseynlidir.
-        2. Marketplace-ə daxil olmaq üçün axtarışa 'market' yazmaq kifayətdir.
-        3. Özəl sifariş üçün Menu-dan 'Özəl Sifariş' bölməsini seçmək lazımdır.
-        4. Qiymətlər həmişə AZN ilə hesablanır.
-        5. Admin kodu '20107213'-dir (Yalnız admin girişini soruşanlara bildir).
-        Müştərilərə qarşı ciddi, texnoloji və yardımsevər ol.Kimsə partnerlik və ya reklam soruşsa, de ki: 'NEXA ekosistemi böyüyür.Və bu əla seçimdir! Reklam və əməkdaşlıq üçün Təbriz Hüseynli ilə əlaqə saxlayın:0502236319' Qiymət-zad demə, qoy özünlə danışsınlar, əgər istəsən bunun yerinə oxşarında de.`;
+        const VEXA_BRAIN = `Sən NEXA Industries-in rəsmi süni intellektisən və adın VEXA. Yaradıcın Təbriz Hüseynlidir. Qiymətlər AZN ilədir.`;
 
+        // --- BAZADAN ÇƏKMƏK ---
+        async function fetchProducts() {
+            try {
+                const res = await fetch(`${SB_URL}/rest/v1/products?select=*`, {
+                    headers: { "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` }
+                });
+                marketplaceData = await res.json();
+                renderMarket();
+                if(document.getElementById('admin-panel').classList.contains('active')) renderAdminList();
+            } catch (e) { console.error("Xəta:", e); }
+        }
+
+        // --- MƏHSUL ƏLAVƏ ETMƏK ---
+        async function adminAddProduct() {
+            const name = document.getElementById('adm-name').value;
+            const price = document.getElementById('adm-price').value;
+            const desc = document.getElementById('adm-desc').value;
+            const fileInput = document.getElementById('adm-file');
+
+            if(!name || !price) return nexaNotify("Ad və qiymət mütləqdir!", true);
+
+            const uploadToSB = async (imgData) => {
+                nexaNotify("Buluda göndərilir...");
+                try {
+                    await fetch(`${SB_URL}/rest/v1/products`, {
+                        method: "POST",
+                        headers: { 
+                            "apikey": SB_KEY, 
+                            "Authorization": `Bearer ${SB_KEY}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ name, price, image_url: imgData, product_desc: desc })
+                    });
+                    nexaNotify("Məhsul Buluda Əlavə Edildi!");
+                    fetchProducts();
+                    document.getElementById('adm-name').value = "";
+                    document.getElementById('adm-price').value = "";
+                    document.getElementById('adm-desc').value = "";
+                    fileInput.value = "";
+                } catch (e) { nexaNotify("Xəta baş verdi!", true); }
+            };
+
+            if(fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => uploadToSB(e.target.result);
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                uploadToSB("https://via.placeholder.com/300");
+            }
+        }
+
+        // --- SİLMƏK ---
+        async function deleteProduct(id) {
+            if(!confirm("Məhsul silinsin?")) return;
+            try {
+                await fetch(`${SB_URL}/rest/v1/products?id=eq.${id}`, {
+                    method: "DELETE",
+                    headers: { "apikey": SB_KEY, "Authorization": `Bearer ${SB_KEY}` }
+                });
+                nexaNotify("Silindi.");
+                fetchProducts();
+            } catch (e) { nexaNotify("Xəta!", true); }
+        }
+
+        function renderAdminList() {
+            const list = document.getElementById('admin-item-list');
+            if(!list) return;
+            list.innerHTML = "<h3>Məhsullar (Live)</h3>" + marketplaceData.map(i => `
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px; background:#111; padding:10px; border-radius:8px;">
+                    <span>${i.name}</span>
+                    <button onclick="deleteProduct(${i.id})" style="color:var(--error); background:none; border:none; cursor:pointer;">SİL</button>
+                </div>
+            `).join('');
+        }
+
+        function renderMarket() {
+            const container = document.getElementById('market-list');
+            if(!container) return;
+            container.innerHTML = marketplaceData.map(item => `
+                <div class="product-card">
+                    <img src="${item.image_url || 'https://via.placeholder.com/300'}">
+                    <div style="padding:20px;">
+                        <h3>${item.name}</h3>
+                        <p style="color:#888; font-size:0.8rem; margin:10px 0;">${item.product_desc || ''}</p>
+                        <div style="color:var(--accent); font-size:1.5rem; font-weight:900; margin-bottom:15px;">${item.price}</div>
+                        <button class="btn-action" onclick="selectedProduct='${item.name}'; openPanel('buy-panel')">SİFARİŞ ET</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- STANDART FUNKSİYALAR ---
         function goHome() {
             document.getElementById('market-view').style.display = 'none';
             document.getElementById('home-view').style.display = 'block';
@@ -251,71 +339,11 @@
         function smartSearch(e) {
             const val = (e.target.value || e.target || "").toString().trim().toLowerCase();
             if(e.key === 'Enter' || val === 'market') {
-                if(val === 'market') {
-                    closeAllPanels();
-                    document.getElementById('home-view').style.display = 'none';
-                    document.getElementById('market-view').style.display = 'block';
-                    renderMarket();
-                }
+                closeAllPanels();
+                document.getElementById('home-view').style.display = 'none';
+                document.getElementById('market-view').style.display = 'block';
+                fetchProducts();
             }
-        }
-
-        function adminAddProduct() {
-            const name = document.getElementById('adm-name').value;
-            const price = document.getElementById('adm-price').value;
-            const desc = document.getElementById('adm-desc').value;
-            const fileInput = document.getElementById('adm-file');
-
-            if(!name || !price) return nexaNotify("Ad və qiymət mütləqdir!", true);
-
-            const addData = (imgUrl) => {
-                marketplaceData.push({ id: Date.now(), name, price, img: imgUrl, desc });
-                localStorage.setItem('nexaMarket', JSON.stringify(marketplaceData));
-                renderAdminList(); renderMarket(); nexaNotify("Məhsul əlavə edildi.");
-                document.getElementById('adm-name').value = "";
-                document.getElementById('adm-price').value = "";
-                document.getElementById('adm-desc').value = "";
-                fileInput.value = "";
-            };
-
-            if(fileInput.files[0]) {
-                const reader = new FileReader();
-                reader.onload = (e) => addData(e.target.result);
-                reader.readAsDataURL(fileInput.files[0]);
-            } else {
-                addData("https://via.placeholder.com/300");
-            }
-        }
-
-        function deleteProduct(id) {
-            marketplaceData = marketplaceData.filter(i => i.id !== id);
-            localStorage.setItem('nexaMarket', JSON.stringify(marketplaceData));
-            renderAdminList(); renderMarket();
-        }
-
-        function renderAdminList() {
-            const list = document.getElementById('admin-item-list');
-            list.innerHTML = "<h3>Məhsullar</h3>" + marketplaceData.map(i => `
-                <div style="display:flex; justify-content:space-between; margin-bottom:10px; background:#111; padding:10px;">
-                    <span>${i.name}</span>
-                    <button onclick="deleteProduct(${i.id})" style="color:red; background:none; border:none; cursor:pointer;">Sil</button>
-                </div>
-            `).join('');
-        }
-
-        function renderMarket() {
-            const container = document.getElementById('market-list');
-            container.innerHTML = marketplaceData.map(item => `
-                <div class="product-card">
-                    <img src="${item.img}">
-                    <div style="padding:20px;">
-                        <h3>${item.name}</h3>
-                        <p style="color:#888; font-size:0.8rem; margin:10px 0;">${item.desc}</p>
-                        <div style="color:var(--accent); font-size:1.5rem; font-weight:900; margin-bottom:15px;">${item.price}</div>
-                        <button class="btn-action" onclick="selectedProduct='${item.name}'; openPanel('buy-panel')">SİFARİŞ ET</button>
-                    </div>
-                </div>
-            `).join('');
         }
 
         async function askVexa() {
@@ -336,7 +364,7 @@
                 });
                 const data = await response.json();
                 logs.innerHTML += `<div class="msg ai">${data.choices[0].message.content}</div>`;
-            } catch (e) { logs.innerHTML += `<div class="msg ai">Sistem xətası: AI hazırda cavab verə bilmir.</div>`; }
+            } catch (e) { logs.innerHTML += `<div class="msg ai">Sistem xətası...</div>`; }
             logs.scrollTop = logs.scrollHeight;
         }
 
@@ -378,7 +406,7 @@
             });
         };
         window.addEventListener('scroll', revealSections);
-        window.onload = () => { renderMarket(); revealSections(); };
+        window.onload = () => { fetchProducts(); revealSections(); };
     </script>
 </body>
 </html>
